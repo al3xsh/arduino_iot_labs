@@ -166,7 +166,7 @@ void reconnect()
       // "throttle" topic which will let us know if we are bumping up 
       // against the adafruit.io rate limit)
       client.subscribe("alexshenfield/f/status-messages");
-      client.subscribe("alexshenfield/f/light");
+      client.subscribe("alexshenfield/f/light-switch");
       client.subscribe("alexshenfield/throttle");
     }
     else
