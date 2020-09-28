@@ -5,37 +5,35 @@
  * setting the brightness of an led on pin 3 and reading light values
  *
  * author:  alex shenfield
- * date:    10/09/2018
+ * date:    10/09/2020
  */
 
 // INCLUDES
 
-// note: the ethernet shields we have here at SHU use the Ethernet2.h
-// library
-#include <Ethernet2.h>
-#include <SPI.h>
+// we are using the SparkFun ESP8266 WiFi shield - but the SparkFun libraries suck
+// so we are using the WiFiEspAt library
+#include <SoftwareSerial.h> 
+#include <WiFiEspAT.h>
 
-// include the aREST library
+// my wifi credentials are included as a seperate header file
+#include "MyCredentials.h"
+
+// include the aREST library (making sure that it knows we are using a WiFi client
+#define WiFi_h 1
 #include <aREST.h>
 
 // include the avr watchdog timer library
 #include <avr/wdt.h>
 
-// ETHERNET DECLARATIONS
+// WIFI INITIALISATION
 
-// set up a server on port 80 to host our webservice
-EthernetServer server = EthernetServer(80);
+// create our software serial connection to the esp8266
+SoftwareSerial esp8266(8, 9);
 
-// the ethernet shields and ethernet libraries support DHCP as long as
-// you are plugged into a device with a DHCP server however, if you
-// are plugged straight in to the network switch in the cabinet (as
-// in the embedded lab) you will need to allocate a static ip address
-IPAddress ip(192, 168, 137, 11);
-IPAddress gateway(192, 168, 137, 254);
-IPAddress subnet(255, 255, 255, 0);
-
-// ethernet shield mac address
-byte mac[] = {0x90, 0xA2, 0xDA, 0x0F, 0xF5, 0xAD};
+// set up a server on port 80 (note: web browsers usually
+// assume that the server is running on port 80 unless told
+// otherwise)
+WiFiServer server(80);
 
 // AREST DECLARATIONS
 
@@ -44,6 +42,7 @@ aREST rest = aREST();
 
 // variables to monitor with our webservice
 int light_level = 0;
+int temp_level = 0;
 
 // CODE
 
@@ -55,12 +54,46 @@ void setup()
   Serial.begin(9600);
   Serial.println("starting rest web service on arduino ...");
 
-  // set pin modes
-  pinMode(3, OUTPUT);
-  pinMode(A0, INPUT);
+  // set up the esp8266 module
+  esp8266.begin(9600);
+  if (!WiFi.init(esp8266))
+  {
+    Serial.println("error talking to ESP8266 module");
+    while(true)
+    {
+    }
+  }
+  Serial.println("ESP8266 connected");
 
-  // expose the light level variable to the REST api
+  // connect to wifi
+  WiFi.begin(mySSID, myPSK);
+
+  // waiting for connection to Wifi network
+  Serial.println("waiting for connection to WiFi");
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    delay(1000);
+    Serial.print('.');
+  }
+  Serial.println();
+  Serial.println("connected to WiFi network");  
+
+  // print the IP address to the serial monitor
+  IPAddress myIP = WiFi.localIP();
+  Serial.print("My IP: "); 
+  Serial.println(myIP);
+  
+  // start the server
+  server.begin();
+
+  // set pin modes
+  pinMode(2, OUTPUT);
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+
+  // expose the temperature and light level variables to the REST api
   rest.variable("light_level", &light_level);
+  rest.variable("temp_level", &temp_level);
 
   // expose the led trigger function to the REST api
   rest.function("led", led_control);
@@ -69,21 +102,6 @@ void setup()
   rest.set_id("001");
   rest.set_name("alexs_arduino");
 
-  // start the ethernet shield comms - initially try to get a DHCP ip
-  // address
-  if (Ethernet.begin(mac) == 0)
-  {
-    // if DHCP fails, allocate a static ip address
-    Serial.println("failed to configure ethernet using DHCP");
-    Ethernet.begin(mac, ip);
-  }
-
-  // start the server, and print the IP address to the serial
-  // monitor
-  server.begin();
-  Serial.print("web service is at: ");
-  Serial.println(Ethernet.localIP());
-
   // start watchdog timer
   wdt_enable(WDTO_4S);
 }
@@ -91,11 +109,12 @@ void setup()
 // main loop
 void loop()
 {
-  // update our light level each time round the loop
-  light_level = analogRead(A0);
+  // update our temperature and light levels each time round the loop
+  temp_level = analogRead(A0);
+  light_level = analogRead(A1);
 
   // listen for incoming clients
-  EthernetClient client = server.available();
+  WiFiClient client = server.available();
   rest.handle(client);
   wdt_reset();
 }
@@ -114,7 +133,7 @@ int led_control(String command)
   pwm = constrain(pwm, 0, 255);
 
   // send pwm signal to the led
-  analogWrite(3, pwm);
+  analogWrite(2, pwm);
 
   // return 1 (indicating success)
   return 1;
