@@ -1,87 +1,110 @@
 /*
  * simple_web_server.ino
  *
- * a simple web server for demonstrating arduino and ethernet
+ * a simple web server for demonstrating arduino and wifi
  * connectivity
  *
  * author:  alex shenfield
- * date:    10/09/2018
+ * date:    10/09/2020
  */
 
-// note: the ethernet shields we have here at SHU use the
-// Ethernet2.h library - however, many of the other shields on
-// the market use the original Ethernet.h library!
-#include <Ethernet2.h>
-#include <SPI.h>
+// INCLUDES
+
+// we are using the SparkFun ESP8266 WiFi shield - but the SparkFun libraries suck
+// so we are using the WiFiEspAt library
+#include <SoftwareSerial.h> 
+#include <WiFiEspAT.h>
+
+// my wifi credentials are included as a seperate header file
+#include "MyCredentials.h"
+
+// WIFI INITIALISATION
+
+// create our software serial connection to the esp8266
+SoftwareSerial esp8266(8, 9);
 
 // set up a server on port 80 (note: web browsers usually
 // assume that the server is running on port 80 unless told
 // otherwise)
-EthernetServer server = EthernetServer(80);
-
-// the ethernet shields and ethernet libraries support DHCP as long as
-// you are plugged into a device with a DHCP server however, if you
-// are plugged straight in to the network switch in the cabinet (as
-// in the embedded lab) you will need to allocate a static ip address
-IPAddress ip(192, 168, 137, 11);
-IPAddress gateway(192, 168, 137, 254);
-IPAddress subnet(255, 255, 255, 0);
-
-// ethernet shield mac address (i.e. the hexadecimal numbers found
-// on the bottom of the shield)
-byte mac[] = {0x90, 0xA2, 0xDA, 0x0F, 0xF5, 0xAD};
+WiFiServer server(80);
 
 // CODE
 
 // set up code
 void setup()
 {
-  // set up serial comms for debugging and display of
-  // DHCP allocated IP address
+  // set up serial comms for debugging and display of DHCP allocated IP address
   Serial.begin(9600);
 
-  // start the ethernet shield comms - initially try to get a DHCP ip 
-  // address
-  if (Ethernet.begin(mac) == 0) 
-  {
-    // if DHCP fails, allocate a static ip address
-    Serial.println("failed to configure ethernet using DHCP");
-    Ethernet.begin(mac, ip);
-  }
+  // set up the esp8266 module
+  esp8266.begin(9600);
+  if (!WiFi.init(esp8266))
+  {
+    Serial.println("error talking to ESP8266 module");
+    while(true)
+    {
+    }
+  }
+  Serial.println("ESP8266 connected");
 
-  // start the server, and print the IP address to the serial
-  // monitor
+  // connect to wifi
+  WiFi.begin(mySSID, myPSK);
+
+  // waiting for connection to Wifi network
+  Serial.println("waiting for connection to WiFi");
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    delay(1000);
+    Serial.print('.');
+  }
+  Serial.println();
+  Serial.println("connected to WiFi network");  
+
+  // print the IP address to the serial monitor
+  IPAddress myIP = WiFi.localIP();
+  Serial.print("My IP: "); 
+  Serial.println(myIP);
+  
+  // start the server
   server.begin();
-  Serial.println(Ethernet.localIP());
 }
 
 // main code
 void loop()
 {
   // check for a client connection
-  EthernetClient client = server.available();
+  WiFiClient client = server.available();
 
-  // while the client is still connected
-  while (client)
+  // if a remote client is connected
+  if (client)
   {
-    // and has more data to send
-    if (client.available() > 0)
-    {
-      // read bytes from the incoming client and write them to
-      // the serial monitor
-      Serial.print((char)client.read());
-    }
-    // when the client is done sending data
-    else
-    {
-      // send standard http response header (to acknowledge the
-      // data)
-      client.println("HTTP/1.1 200 OK");
-      client.println("Content-Type: text/html");
-      client.println();
+    // get the ip address of the remote client
+    IPAddress ip = client.remoteIP();
+    Serial.print("new client at ");
+    Serial.println(ip);
 
-      // disconnect from client
-      client.stop();
+    // while the client is still connected
+    while (client)
+    {
+      // and has more data to send
+      if (client.available() > 0)
+      {
+        // read bytes from the incoming client and write them to
+        // the serial monitor
+        Serial.print((char)client.read());
+      }
+      // when the client is done sending data
+      else
+      {
+        // send standard http response header (to acknowledge the
+        // data)
+        client.println("HTTP/1.1 200 OK");
+        client.println("Content-Type: text/html");
+        client.println();
+  
+        // disconnect from client
+        client.stop();
+      }
     }
   }
 }
