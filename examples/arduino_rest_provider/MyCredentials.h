@@ -1,3 +1,3 @@
 // my wifi credentials
-const char mySSID[] = "";
-const char myPSK[]  = "";
+const char mySSID[] = "NOWTV2BB7F";
+const char myPSK[]  = "YPYNLYWVTR";
