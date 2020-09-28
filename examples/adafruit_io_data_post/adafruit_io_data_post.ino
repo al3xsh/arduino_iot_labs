@@ -5,33 +5,29 @@
  * of restful webservices
  * 
  * author: alex shenfield
- * date:   08/10/2018
+ * date:   28/09/2020
  */
 
-#include <Ethernet2.h>
-#include <SPI.h>
-#include "RestClient.h"
+// INCLUDES
+
+// we are using the SparkFun ESP8266 WiFi shield - but the SparkFun libraries suck
+// so we are using the WiFiEspAt library
+#include <SoftwareSerial.h> 
+#include <WiFiEspAT.h>
+
+#include <RestClient.h>
+
+// my wifi credentials are included as a seperate header file
+#include "MyCredentials.h"
+
+// WIFI INITIALISATION
+
+// create our software serial connection to the esp8266
+SoftwareSerial esp8266(8, 9);
+WiFiClient wifi_client;
 
 // set the rest connection information
 RestClient restclient = RestClient("io.adafruit.com");
-
-// ETHERNET DECLARATIONS
-
-// set up a server on port 80 to host our webservice
-EthernetServer server = EthernetServer(80);
-
-// the ethernet shields and ethernet libraries support DHCP as long as
-// you are plugged into a device with a DHCP server however, if you
-// are plugged straight in to the network switch in the cabinet (as
-// in the embedded lab) you will need to allocate a static ip address
-IPAddress ip(192, 168, 137, 11);
-IPAddress gateway(192, 168, 137, 254);
-IPAddress subnet(255, 255, 255, 0);
-
-// ethernet shield mac address
-byte mac[] = {0x90, 0xA2, 0xDA, 0x0F, 0xF5, 0xAD};
-
-// CODE
 
 // CODE
 
@@ -41,30 +37,36 @@ void setup()
   // set up serial comms for debugging and display of DHCP allocated ip
   // address
   Serial.begin(9600);
-  Serial.println("starting rest client on arduino ...");
+  Serial.println("starting rest web service on arduino ...");
 
-  // set an analog input pin
-  pinMode(A0, INPUT);
-
-  // start the ethernet shield comms - initially try to get a DHCP ip
-  // address
-  if (Ethernet.begin(mac) == 0)
+  // set up the esp8266 module
+  esp8266.begin(9600);
+  if (!WiFi.init(esp8266))
   {
-    // if DHCP fails, allocate a static ip address
-    Serial.println("failed to configure ethernet using DHCP");
-    Ethernet.begin(mac, ip);
+    Serial.println("error talking to ESP8266 module");
+    while(true)
+    {
+    }
   }
+  Serial.println("ESP8266 connected");
 
-  // start the server, and print the IP address to the serial
-  // monitor
-  server.begin();
-  Serial.print("rest client is at: ");
-  Serial.println(Ethernet.localIP());
+  // connect to wifi
+  WiFi.begin(mySSID, myPSK);
 
-  // wait for everything to settle down
-  delay(1000);
-  Serial.println("setup complete!");
+  // waiting for connection to Wifi network
+  Serial.println("waiting for connection to WiFi");
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    delay(1000);
+    Serial.print('.');
+  }
+  Serial.println();
+  Serial.println("connected to WiFi network");  
 
+  // print the IP address to the serial monitor
+  IPAddress myIP = WiFi.localIP();
+  Serial.print("My IP: "); 
+  Serial.println(myIP);
 }
 
 // main program
@@ -74,13 +76,15 @@ void loop()
   String response = "";
 
   // assemble the http headers
-  restclient.setHeader("x-aio-key: 47fcedafc7b648d5baa7d3f8feabc822");
+  restclient.setHeader("x-aio-key: aio_bklr09M0R94ksxhvcEmv4AJPjlnp");
   restclient.setHeader("Content-Type: application/json");
 
   // read the data and create the json string
   char data[64];
   int reading = analogRead(A0);
   sprintf(data, "{\"value\":\"%u\"}", reading);
+
+  Serial.println(data);
 
   // post the data
   int statusCode = restclient.post("/api/feeds/testing.numbers/data", data, &response);
@@ -89,7 +93,7 @@ void loop()
   Serial.print("status code from server: ");
   Serial.println(statusCode);
   Serial.print("response body from server: ");
-  Serial.println(response);
+  Serial.print(response);
   
   // delay a little
   delay(5000);
