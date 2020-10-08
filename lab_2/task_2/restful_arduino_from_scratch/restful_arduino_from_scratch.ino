@@ -1,28 +1,27 @@
 /*
- * web_addressable_leds.ino
+ * restful_arduino_from_scratch.ino
  *
- * simple web service to control LEDs
+ * simple rest based webservice with extra functionality
  *
  * author:  alex shenfield
- * date:    10/09/2018
+ * date:    10/09/2020
  */
 
-#include <Ethernet2.h>
-#include <SPI.h>
+// we are using the SparkFun ESP8266 WiFi shield - but the SparkFun libraries suck
+// so we are using the WiFiEspAt library
+#include <SoftwareSerial.h> 
+#include <WiFiEspAT.h>
+
+// my wifi credentials are included as a seperate header file
+#include "MyCredentials.h"
+
+// create our software serial connection to the esp8266
+SoftwareSerial esp8266(8, 9);
 
 // set up a server on port 80 (note: web browsers usually
 // assume that the server is running on port 80 unless told
 // otherwise)
-EthernetServer server = EthernetServer(80);
-
-// ip address, gateway and network mask for the web service
-IPAddress ip(192, 168, 137, 11);
-IPAddress gateway(192, 168, 137, 254);
-IPAddress subnet(255, 255, 255, 0);
-
-// ethernet shield mac address (i.e. the hexadecimal numbers found
-// on the bottom of the shield)
-byte mac[] = {0x90, 0xA2, 0xDA, 0x0F, 0xF5, 0xAD};
+WiFiServer server(80);
 
 // variable indicating when to start paying attention to data
 boolean pay_attention = true;
@@ -32,30 +31,46 @@ boolean pay_attention = true;
 // set up code
 void setup()
 {
-  // set up serial comms for debugging and display of
-  // DHCP allocated IP address
+  // set up serial comms for debugging and display of DHCP allocated IP address
   Serial.begin(9600);
 
-  // set up pins
+  // set up the esp8266 module
+  esp8266.begin(9600);
+  if (!WiFi.init(esp8266))
+  {
+    Serial.println("error talking to ESP8266 module");
+    while(true)
+    {
+    }
+  }
+  Serial.println("ESP8266 connected");
+
+  // connect to wifi
+  WiFi.begin(mySSID, myPSK);
+
+  // waiting for connection to Wifi network
+  Serial.println("waiting for connection to WiFi");
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    delay(1000);
+    Serial.print('.');
+  }
+  Serial.println();
+  Serial.println("connected to WiFi network");  
+
+  // print the IP address to the serial monitor
+  IPAddress myIP = WiFi.localIP();
+  Serial.print("My IP: "); 
+  Serial.println(myIP);
+  
+  // start the server
+  server.begin();
+
+  // set up the pins as outputs
   pinMode(2, OUTPUT);
   pinMode(3, OUTPUT);
   pinMode(4, OUTPUT);
   pinMode(5, OUTPUT);
-
-  pinMode(A0, INPUT);
-
-  // start the ethernet shield comms - initially try to get a DHCP ip
-  // address
-  if (Ethernet.begin(mac) == 0)
-  {
-    // if DHCP fails, allocate a static ip address
-    Serial.println("failed to configure ethernet using DHCP");
-    Ethernet.begin(mac, ip);
-  }
-
-  // start the server, and print the IP address to the serial monitor
-  server.begin();
-  Serial.println(Ethernet.localIP());
 }
 
 // main code
@@ -70,90 +85,99 @@ void check_for_connections()
 {
   // get any client that is connected to the server and
   // trying to send data
-  EthernetClient client = server.available();
+  WiFiClient client = server.available();
 
   // record whether we have already sent the standard http
   // response header
   boolean header_sent = false;
 
-  // while the client is connected ...
-  while (client)
+  // if a remote client is connected
+  if (client)
   {
-    // if we haven't already sent the http header
-    if (!header_sent)
+    // get the ip address of the remote client
+    IPAddress ip = client.remoteIP();
+    Serial.print("new client at ");
+    Serial.println(ip);
+    
+    // while the client is connected ...
+    while (client)
     {
-      // send standard http response header (to acknowledge the
-      // data)
-      client.println("HTTP/1.1 200 OK");
-      client.println("Content-Type: text/html");
-      client.println();
-      header_sent = true;
-    }
-
-    // ... and has more data to send
-    if (client.available() > 0)
-    {
-      // read the next byte
-      char c = client.read();
-
-      // debugging
-      Serial.print(c);
-
-      // pay attention to all the data between the '?' character
-      // and a space
-      if (c == '?')
+      // if we haven't already sent the http header
+      if (!header_sent)
       {
-        pay_attention = true;
+        // send standard http response header (to acknowledge the
+        // data)
+        client.println("HTTP/1.1 200 OK");
+        client.println("Content-Type: text/html");
+        client.println();
+        header_sent = true;
       }
-      else if (c == ' ')
+  
+      // ... and has more data to send
+      if (client.available() > 0)
       {
-        pay_attention = false;
-      }
-
-      // if we are paying attention ...
-      if (pay_attention)
-      {
-        // use a switch statement to decide what to do
-        switch (c)
+        // read the next byte
+        char c = client.read();
+  
+        // debugging
+        Serial.print(c);
+  
+        // pay attention to all the data between the '?' character
+        // and a space
+        if (c == '?')
         {
-          case '2':
-            trigger_pin(2, client);
-            break;
-
-          case '3':
-            trigger_pin(3, client);
-            break;
-
-          case '4':
-            trigger_pin(4, client);
-            break;
-
-          case '5':
-            trigger_pin(5, client);
-            break;
-
-          case 'x':
-            clear_pins(client);
-            break;
-
-          case 'p':
-            read_potentiometer(client);
-            break;
+          pay_attention = true;
+        }
+        else if (c == ' ')
+        {
+          pay_attention = false;
+        }
+  
+        // if we are paying attention ...
+        if (pay_attention)
+        {
+          // use a switch statement to decide what to do
+          switch (c)
+          {
+            case '2':
+              trigger_pin(2, client);
+              break;
+  
+            case '3':
+              trigger_pin(3, client);
+              break;
+  
+            case '4':
+              trigger_pin(4, client);
+              break;
+  
+            case '5':
+              trigger_pin(5, client);
+              break;
+  
+            case 'x':
+              clear_pins(client);
+              break;
+  
+            case 'p':
+              read_potentiometer(client);
+              break;
+          }
         }
       }
-    }
-    // when the client is done sending data
-    else
-    {
-      // disconnect from client
-      client.stop();
+      // when the client is done sending data
+      else
+      {
+        // disconnect from client
+        client.stop();
+      }
     }
   }
 }
 
 // separate function for triggering pins - note we only need
 // the ethernet client so we can send data to it
-void trigger_pin(int pin_number, EthernetClient client)
+void trigger_pin(int pin_number, WiFiClient client)
 {
   // print a status message
   client.print("Turning on pin <b>");
@@ -166,7 +190,7 @@ void trigger_pin(int pin_number, EthernetClient client)
 
 // another function to clear all pins - again the ethernet client
 // is only needed to return data to the web page
-void clear_pins(EthernetClient client)
+void clear_pins(WiFiClient client)
 {
   // print a status message
   client.println("Clearing all pins!<br>");
@@ -180,7 +204,7 @@ void clear_pins(EthernetClient client)
 
 // another function to read the potentiometer - again the ethernet client
 // is only needed to return data to the web page
-void read_potentiometer(EthernetClient client)
+void read_potentiometer(WiFiClient client)
 {
   // print a status message
   client.println("Reading potentiometer!<br>");
