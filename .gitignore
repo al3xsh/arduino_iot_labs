@@ -1,0 +1,2 @@
+# ignore my credentials and other keys (e.g. for adafruit.io)
+MyCredentials.h
