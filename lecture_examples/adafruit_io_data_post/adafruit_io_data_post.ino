@@ -76,7 +76,7 @@ void loop()
   String response = "";
 
   // assemble the http headers
-  restclient.setHeader("x-aio-key: aio_bklr09M0R94ksxhvcEmv4AJPjlnp");
+  restclient.setHeader(xaiokey);
   restclient.setHeader("Content-Type: application/json");
 
   // read the data and create the json string

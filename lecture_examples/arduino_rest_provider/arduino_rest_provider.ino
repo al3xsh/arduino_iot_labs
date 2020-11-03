@@ -87,7 +87,7 @@ void setup()
   server.begin();
 
   // set pin modes
-  pinMode(2, OUTPUT);
+  pinMode(3, OUTPUT);
   pinMode(A0, INPUT);
   pinMode(A1, INPUT);
 
@@ -133,7 +133,7 @@ int led_control(String command)
   pwm = constrain(pwm, 0, 255);
 
   // send pwm signal to the led
-  analogWrite(2, pwm);
+  analogWrite(3, pwm);
 
   // return 1 (indicating success)
   return 1;
