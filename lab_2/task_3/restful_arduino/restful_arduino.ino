@@ -42,7 +42,6 @@ aREST rest = aREST();
 
 // variables to monitor with our webservice
 int light_level = 0;
-int temp_level = 0;
 
 // CODE
 
@@ -87,13 +86,11 @@ void setup()
   server.begin();
 
   // set pin modes
-  pinMode(2, OUTPUT);
+  pinMode(3, OUTPUT);
   pinMode(A0, INPUT);
-  pinMode(A1, INPUT);
 
-  // expose the temperature and light level variables to the REST api
+  // expose the light level variable to the REST api
   rest.variable("light_level", &light_level);
-  rest.variable("temp_level", &temp_level);
 
   // expose the led trigger function to the REST api
   rest.function("led", led_control);
@@ -109,9 +106,8 @@ void setup()
 // main loop
 void loop()
 {
-  // update our temperature and light levels each time round the loop
-  temp_level = analogRead(A0);
-  light_level = analogRead(A1);
+  // update our light level each time round the loop
+  light_level = analogRead(A0);
 
   // listen for incoming clients
   WiFiClient client = server.available();
@@ -133,7 +129,7 @@ int led_control(String command)
   pwm = constrain(pwm, 0, 255);
 
   // send pwm signal to the led
-  analogWrite(2, pwm);
+  analogWrite(3, pwm);
 
   // return 1 (indicating success)
   return 1;
